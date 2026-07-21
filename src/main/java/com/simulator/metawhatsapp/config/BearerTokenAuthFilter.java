@@ -5,7 +5,6 @@ import com.simulator.metawhatsapp.dto.response.ErrorDetail;
 import com.simulator.metawhatsapp.dto.response.MetaErrorResponse;
 import com.simulator.metawhatsapp.exception.MetaApiException;
 import com.simulator.metawhatsapp.generator.FbTraceIdGenerator;
-import com.simulator.metawhatsapp.properties.SimulatorProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,21 +23,18 @@ public class BearerTokenAuthFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
 
-    private final SimulatorProperties properties;
     private final ObjectMapper objectMapper;
     private final FbTraceIdGenerator fbTraceIdGenerator;
 
-    public BearerTokenAuthFilter(SimulatorProperties properties,
-                                 ObjectMapper objectMapper,
+    public BearerTokenAuthFilter(ObjectMapper objectMapper,
                                  FbTraceIdGenerator fbTraceIdGenerator) {
-        this.properties = properties;
         this.objectMapper = objectMapper;
         this.fbTraceIdGenerator = fbTraceIdGenerator;
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        // Webhook verification (GET /webhook) authenticates via hub.verify_token, not Bearer.
+        // Webhook verification / callbacks bypass bearer authentication
         return request.getRequestURI().startsWith("/webhook");
     }
 
@@ -48,6 +44,7 @@ public class BearerTokenAuthFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String header = request.getHeader("Authorization");
 
+        // 1. Ensure Authorization header exists
         if (header == null || header.isBlank()) {
             log.warn("Rejected request to {} - missing Authorization header", request.getRequestURI());
             writeError(response, new MetaApiException(
@@ -56,24 +53,16 @@ public class BearerTokenAuthFilter extends OncePerRequestFilter {
             return;
         }
 
+        // 2. Ensure format is 'Bearer <token>' with a non-empty token string
         if (!header.startsWith(BEARER_PREFIX) || header.substring(BEARER_PREFIX.length()).isBlank()) {
             log.warn("Rejected request to {} - malformed Authorization header", request.getRequestURI());
-            writeError(response, invalidTokenException());
+            writeError(response, new MetaApiException(
+                    HttpStatus.UNAUTHORIZED, "OAuthException", 190, "Invalid OAuth access token."));
             return;
         }
 
-        String token = header.substring(BEARER_PREFIX.length()).trim();
-        if (!properties.auth().validTokens().contains(token)) {
-            log.warn("Rejected request to {} - unrecognized access token", request.getRequestURI());
-            writeError(response, invalidTokenException());
-            return;
-        }
-
+        // ANY token is accepted - allow request through
         filterChain.doFilter(request, response);
-    }
-
-    private MetaApiException invalidTokenException() {
-        return new MetaApiException(HttpStatus.UNAUTHORIZED, "OAuthException", 190, "Invalid OAuth access token.");
     }
 
     private void writeError(HttpServletResponse response, MetaApiException ex) throws IOException {
@@ -81,11 +70,13 @@ public class BearerTokenAuthFilter extends OncePerRequestFilter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setHeader("WWW-Authenticate",
                 "OAuth \"Facebook Platform\" \"invalid_token\" \"Invalid OAuth access token.\"");
-        response.setHeader("X-FB-Trace-Id", fbTraceIdGenerator.generate());
+
+        String traceId = fbTraceIdGenerator.generate();
+        response.setHeader("X-FB-Trace-Id", traceId);
 
         ErrorDetail detail = new ErrorDetail(
                 ex.getMessage(), ex.getType(), ex.getCode(),
-                ex.getErrorData(), ex.getErrorSubcode(), fbTraceIdGenerator.generate());
+                ex.getErrorData(), ex.getErrorSubcode(), traceId);
         response.getWriter().write(objectMapper.writeValueAsString(MetaErrorResponse.of(detail)));
     }
 }
