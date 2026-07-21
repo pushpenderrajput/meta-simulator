@@ -1,6 +1,11 @@
 package com.simulator.metawhatsapp.util;
 
+import java.util.regex.Pattern;
+
 public final class PhoneNumberUtil {
+
+    private static final Pattern NON_DIGITS = Pattern.compile("[^0-9]");
+    private static final Pattern VALID_CHARS = Pattern.compile("^[0-9+\\-() ]+$");
 
     private PhoneNumberUtil() {
     }
@@ -9,21 +14,19 @@ public final class PhoneNumberUtil {
         if (rawPhoneNumber == null) {
             return null;
         }
-        return rawPhoneNumber.replaceAll("[^0-9]", "");
+        // Uses pre-compiled Pattern matcher (significantly faster)
+        return NON_DIGITS.matcher(rawPhoneNumber).replaceAll("");
     }
 
     public static boolean isPlausiblePhoneNumber(String rawPhoneNumber) {
         if (rawPhoneNumber == null || rawPhoneNumber.isBlank()) {
             return false;
         }
-        if (!rawPhoneNumber.matches("^[0-9+\\-() ]+$")) {
+        if (!VALID_CHARS.matcher(rawPhoneNumber).matches()) {
             return false;
         }
 
         String waId = toWaId(rawPhoneNumber);
-
-        // E.164 standard numbers (excluding country code 0 prefixes)
-        // are between 7 and 15 digits long.
         return waId.length() >= 7 && waId.length() <= 15;
     }
 }
