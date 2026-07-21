@@ -13,6 +13,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
 @RestControllerAdvice
@@ -40,6 +41,20 @@ public class GlobalExceptionHandler {
         log.warn("Rejecting request: unsupported HTTP method - {}", ex.getMessage());
         return build(HttpStatus.METHOD_NOT_ALLOWED, "GraphMethodException", 100, null, null,
                 "(#100) " + ex.getMessage());
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<MetaErrorResponse> handleNotFound(NoResourceFoundException ex) {
+        log.warn("Rejecting request: endpoint not found - {}", ex.getResourcePath());
+        return build(
+                HttpStatus.NOT_FOUND,
+                "GraphMethodException",
+                100,
+                null,
+                null,
+                "Unsupported get request. Object with ID '%s' does not exist, cannot be loaded due to missing permissions, or does not support this operation."
+                        .formatted(ex.getResourcePath())
+        );
     }
 
     @ExceptionHandler(Exception.class)
