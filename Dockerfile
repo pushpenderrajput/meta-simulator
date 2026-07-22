@@ -5,7 +5,7 @@ COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-# Step 2: Run the lightweight Java 21 image
+# Step 2: Run on lightweight Java 21 JRE
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
@@ -13,5 +13,12 @@ COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8081
 ENV PORT=8081
 
-# Optimize JVM memory footprint for 512MB RAM
-ENTRYPOINT ["java", "-Xmx384m", "-Xms128m", "-XX:+UseG1GC", "-jar", "app.jar"]
+# Optimized JVM memory & GC settings for High TPS on Oracle Cloud (4 vCPU / 24GB RAM)
+ENTRYPOINT ["java", \
+            "-server", \
+            "-Xms4g", \
+            "-Xmx12g", \
+            "-XX:+UseG1GC", \
+            "-XX:MaxGCPauseMillis=20", \
+            "-XX:+UseStringDeduplication", \
+            "-jar", "app.jar"]
