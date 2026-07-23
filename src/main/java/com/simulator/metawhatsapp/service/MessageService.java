@@ -18,17 +18,17 @@ public class MessageService {
 
     private final WamidGenerator wamidGenerator;
     private final WebhookDispatcher webhookDispatcher;
+    private final DlrQueueService dlrQueueService; // Injected to support queued/throttled DLR dispatching
 
     public SendMessageResponse acceptMessage(String phoneNumberId, SendMessageRequest request) {
         String waId = PhoneNumberUtil.toWaId(request.to());
         String wamid = wamidGenerator.generate();
 
-
-        log.info("Accepted type={} message on phoneNumberId={} -> to={} waId={} wamid={}",
+        log.debug("Accepted type={} message on phoneNumberId={} -> to={} waId={} wamid={}",
                 request.type(), phoneNumberId, request.to(), waId, wamid);
 
-        // NEW PHASE 3 TRIGGER: Kick off the async timeline callbacks in memory
-
+        // Schedule async DLR lifecycle. DLR payloads generated here will now be enqueued
+        // safely into DlrQueueService rather than directly hitting WebClient all at once.
         webhookDispatcher.scheduleMessageLifecycle(wamid, waId);
 
         ContactResponse contact = new ContactResponse(request.to(), waId);

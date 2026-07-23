@@ -1,11 +1,11 @@
 package com.simulator.metawhatsapp.webhook;
 
-import com.simulator.metawhatsapp.client.WebhookClient;
 import com.simulator.metawhatsapp.dto.webhook.ChangeValue;
 import com.simulator.metawhatsapp.dto.webhook.MetaWebhookPayload;
 import com.simulator.metawhatsapp.dto.webhook.Metadata;
 import com.simulator.metawhatsapp.dto.webhook.StatusDetail;
 import com.simulator.metawhatsapp.properties.SimulatorProperties;
+import com.simulator.metawhatsapp.service.DlrQueueService;
 import com.simulator.metawhatsapp.util.TimestampUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +21,7 @@ import java.util.List;
 public class WebhookDispatcher {
 
     private final ThreadPoolTaskScheduler webhookTaskScheduler;
-    private final WebhookClient webhookClient;
+    private final DlrQueueService dlrQueueService; // Injected queue service for controlled DLR dispatch
     private final SimulatorProperties properties;
 
     /**
@@ -58,10 +58,10 @@ public class WebhookDispatcher {
 
     /**
      * Assembles the wire-compatible Meta status JSON container payload and hands it over
-     * to the reactive WebClient wrapper for transport delivery.
+     * to the DlrQueueService for rate-limited, zero-loss background delivery.
      */
     private void dispatchStatus(String wamid, String recipientId, String statusName) {
-        log.info("Triggering async DLR step: status={} for wamid={} to recipient={}", statusName, wamid, recipientId);
+        log.debug("Triggering async DLR step: status={} for wamid={} to recipient={}", statusName, wamid, recipientId);
 
         // Map configuration phone identity values
         Metadata metadata = new Metadata(
@@ -90,7 +90,7 @@ public class WebhookDispatcher {
                 changeValue
         );
 
-        // Submit out-of-band via reactive client
-        webhookClient.sendWebhook(payload);
+        // Enqueue into in-memory queue buffer instead of firing HTTP directly
+        dlrQueueService.enqueueDlr(payload);
     }
 }
