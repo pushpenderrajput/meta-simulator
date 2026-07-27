@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -19,26 +20,22 @@ public class WebhookClient {
     private final WebClient webhookWebClient;
     private final SimulatorProperties properties;
 
-    public void sendWebhook(MetaWebhookPayload payload) {
+    public Mono<Void> sendWebhook(MetaWebhookPayload payload) {
         String targetUrl = properties.webhook().callbackUrl();
 
-        webhookWebClient.post()
+        return webhookWebClient.post()
                 .uri(targetUrl)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
                 .retrieve()
                 .toBodilessEntity()
                 .retryWhen(
-                        Retry.backoff(5, Duration.ofSeconds(1)) // 5 Retries with backoff
-                                .maxBackoff(Duration.ofSeconds(10))
-                                .jitter(0.5)
+                        Retry.backoff(2, Duration.ofMillis(200)) // 2 fast WebClient retries before re-queueing
+                                .maxBackoff(Duration.ofMillis(800))
                 )
                 .doOnSuccess(response ->
-                        log.debug("DLR Delivered successfully.")
+                        log.debug("DLR delivered successfully to {}", targetUrl)
                 )
-                .doOnError(error ->
-                        log.error("Failed DLR delivery to {} after retries. Error: {}", targetUrl, error.getMessage())
-                )
-                .subscribe();
+                .then(); // Returns Mono<Void>
     }
 }

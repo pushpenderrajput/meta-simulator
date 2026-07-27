@@ -2,10 +2,12 @@ package com.simulator.metawhatsapp.service;
 
 import com.simulator.metawhatsapp.client.WebhookClient;
 import com.simulator.metawhatsapp.dto.webhook.MetaWebhookPayload;
+import com.simulator.metawhatsapp.dto.webhook.RetriableDlr;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -19,49 +21,55 @@ public class DlrQueueService {
 
     private final WebhookClient webhookClient;
 
-    // High-capacity queue to buffer DLR payloads during load bursts
-    private final LinkedBlockingQueue<MetaWebhookPayload> dlrQueue = new LinkedBlockingQueue<>(500000);
+    // Queue holding retriable DLR items
+    private final LinkedBlockingQueue<RetriableDlr> dlrQueue = new LinkedBlockingQueue<>(1_000_000);
 
-    // Dynamic rate throttler (e.g., send 300 DLRs per second max)
-    private static final int MAX_DLRS_PER_SECOND = 300;
+    private static final int TARGET_DLRS_PER_SECOND = 50;
+    private static final int MAX_REQUEUE_ATTEMPTS = 3; // Capped to prevent infinite 30-min loops
 
-    /**
-     * Enqueues a DLR payload instantly without blocking the inbound request thread.
-     */
     public void enqueueDlr(MetaWebhookPayload payload) {
-        boolean added = dlrQueue.offer(payload);
+        enqueueDlr(new RetriableDlr(payload));
+    }
+
+    private void enqueueDlr(RetriableDlr item) {
+        boolean added = dlrQueue.offer(item);
         if (!added) {
-            log.error("DLR Buffer Queue is FULL! Payload dropped for WAMID: {}", payload);
+            log.error("❌ DLR Buffer Queue is FULL! Dropping DLR payload.");
         }
     }
 
-    /**
-     * Background daemon worker that steadily drains the queue.
-     */
     @PostConstruct
     public void startDlrQueueConsumer() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-
-        // Calculate interval in microseconds per DLR to maintain precise TPS
-        long delayMicros = 1_000_000L / MAX_DLRS_PER_SECOND;
+        long delayMillis = 1000L / TARGET_DLRS_PER_SECOND; // ~20ms delay
 
         executor.scheduleAtFixedRate(() -> {
             try {
-                MetaWebhookPayload payload = dlrQueue.poll();
-                if (payload != null) {
-                    webhookClient.sendWebhook(payload);
+                RetriableDlr item = dlrQueue.poll();
+                if (item != null) {
+                    webhookClient.sendWebhook(item.getPayload())
+                            .onErrorResume(error -> {
+                                int attempts = item.incrementAttempt();
+                                if (attempts <= MAX_REQUEUE_ATTEMPTS) {
+                                    log.warn("⚠️ Receiver refused connection. Re-queuing DLR (Attempt {}/{})",
+                                            attempts, MAX_REQUEUE_ATTEMPTS);
+                                    enqueueDlr(item);
+                                } else {
+                                    log.error("❌ Max re-queue attempts ({}) reached. Discarding DLR to prevent infinite loop.",
+                                            MAX_REQUEUE_ATTEMPTS);
+                                }
+                                return Mono.empty(); // Safely consumes error to prevent onErrorDropped
+                            })
+                            .subscribe(); // Clean subscription with no unhandled errors
                 }
             } catch (Exception e) {
-                log.error("Error processing queued DLR", e);
+                log.error("Error in DLR queue processor thread", e);
             }
-        }, 0, delayMicros, TimeUnit.MICROSECONDS);
+        }, 0, delayMillis, TimeUnit.MILLISECONDS);
 
-        log.info("DLR Queue Worker initialized. Throttled outbound DLR rate: {} DLRs/sec", MAX_DLRS_PER_SECOND);
+        log.info("🚀 Resilient DLR Queue Consumer started at {} DLR/sec limit.", TARGET_DLRS_PER_SECOND);
     }
 
-    /**
-     * Helper metric to log remaining items in buffer.
-     */
     public int getQueueSize() {
         return dlrQueue.size();
     }

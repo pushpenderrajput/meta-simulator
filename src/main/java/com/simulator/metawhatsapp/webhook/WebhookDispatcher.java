@@ -61,8 +61,7 @@ public class WebhookDispatcher {
      * to the DlrQueueService for rate-limited, zero-loss background delivery.
      */
     private void dispatchStatus(String wamid, String recipientId, String statusName) {
-        log.debug("Triggering async DLR step: status={} for wamid={} to recipient={}", statusName, wamid, recipientId);
-
+        log.info("🚀 DISPATCHING OUTBOUND DLR -> status={} wamid={}", statusName, wamid);
         // Map configuration phone identity values
         Metadata metadata = new Metadata(
                 properties.phoneNumber().displayPhoneNumber(),
