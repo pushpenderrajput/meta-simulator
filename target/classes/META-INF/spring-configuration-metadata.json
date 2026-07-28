@@ -9,49 +9,49 @@
       "name": "simulator.api-version",
       "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$ApiVersion",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
-      "sourceMethod": "public com.simulator.metawhatsapp.properties.SimulatorProperties.ApiVersion apiVersion() "
+      "sourceMethod": "apiVersion()"
     },
     {
       "name": "simulator.auth",
       "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Auth",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
-      "sourceMethod": "public com.simulator.metawhatsapp.properties.SimulatorProperties.Auth auth() "
+      "sourceMethod": "auth()"
     },
     {
       "name": "simulator.delays",
       "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Delays",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
-      "sourceMethod": "public com.simulator.metawhatsapp.properties.SimulatorProperties.Delays delays() "
+      "sourceMethod": "delays()"
     },
     {
       "name": "simulator.events",
       "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Events",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
-      "sourceMethod": "public com.simulator.metawhatsapp.properties.SimulatorProperties.Events events() "
+      "sourceMethod": "events()"
     },
     {
       "name": "simulator.phone-number",
       "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$PhoneNumber",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
-      "sourceMethod": "public com.simulator.metawhatsapp.properties.SimulatorProperties.PhoneNumber phoneNumber() "
+      "sourceMethod": "phoneNumber()"
     },
     {
       "name": "simulator.probability",
       "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Probability",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
-      "sourceMethod": "public com.simulator.metawhatsapp.properties.SimulatorProperties.Probability probability() "
+      "sourceMethod": "probability()"
     },
     {
       "name": "simulator.webhook",
       "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
-      "sourceMethod": "public com.simulator.metawhatsapp.properties.SimulatorProperties.Webhook webhook() "
+      "sourceMethod": "webhook()"
     },
     {
       "name": "simulator.webhook.retry",
       "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook$Retry",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook",
-      "sourceMethod": "public com.simulator.metawhatsapp.properties.SimulatorProperties.Webhook.Retry retry() "
+      "sourceMethod": "retry()"
     }
   ],
   "properties": [

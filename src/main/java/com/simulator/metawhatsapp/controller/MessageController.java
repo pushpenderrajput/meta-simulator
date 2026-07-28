@@ -3,6 +3,7 @@ package com.simulator.metawhatsapp.controller;
 import com.simulator.metawhatsapp.dto.request.SendMessageRequest;
 import com.simulator.metawhatsapp.dto.response.SendMessageResponse;
 import com.simulator.metawhatsapp.service.MessageService;
+import com.simulator.metawhatsapp.service.StatsService;
 import com.simulator.metawhatsapp.validator.ApiVersionValidator;
 import com.simulator.metawhatsapp.validator.MessageContentValidator;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class MessageController {
     private final ApiVersionValidator apiVersionValidator;
     private final MessageContentValidator messageContentValidator;
     private final MessageService messageService;
+    private final StatsService statsService; // Inject StatsService
 
     @PostMapping(value = "/{version}/{phoneNumberId}/messages", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<SendMessageResponse> sendMessage(
@@ -30,17 +32,25 @@ public class MessageController {
             @PathVariable String phoneNumberId,
             @RequestBody SendMessageRequest request) {
 
-        log.debug("Incoming send-message request: version={} phoneNumberId={} type={}",
-                version, phoneNumberId, request.type());
+        statsService.incrementIncomingRequests(); // Increment incoming
 
-        apiVersionValidator.validate(version);
-        messageContentValidator.validate(request);
+        try {
+            log.debug("Incoming send-message request: version={} phoneNumberId={} type={}",
+                    version, phoneNumberId, request.type());
 
-        SendMessageResponse response = messageService.acceptMessage(phoneNumberId, request);
+            apiVersionValidator.validate(version);
+            messageContentValidator.validate(request);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("X-App-Usage", "{\"call_count\":0,\"total_cputime\":0,\"total_time\":0}");
+            SendMessageResponse response = messageService.acceptMessage(phoneNumberId, request);
 
-        return ResponseEntity.ok().headers(headers).body(response);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-App-Usage", "{\"call_count\":0,\"total_cputime\":0,\"total_time\":0}");
+
+            statsService.incrementSuccessRequests(); // Increment success
+            return ResponseEntity.ok().headers(headers).body(response);
+        } catch (Exception e) {
+            statsService.incrementFailedRequests(); // Increment failed
+            throw e;
+        }
     }
 }

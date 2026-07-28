@@ -34,8 +34,9 @@ public class BearerTokenAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        // Webhook verification / callbacks bypass bearer authentication
-        return request.getRequestURI().startsWith("/webhook");
+        String path = request.getRequestURI();
+        // Webhook callbacks AND stats endpoints bypass bearer token authentication
+        return path.startsWith("/webhook") || path.startsWith("/stats");
     }
 
     @Override

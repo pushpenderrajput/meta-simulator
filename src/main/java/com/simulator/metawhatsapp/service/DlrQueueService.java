@@ -20,12 +20,12 @@ import java.util.concurrent.TimeUnit;
 public class DlrQueueService {
 
     private final WebhookClient webhookClient;
+    private final StatsService statsService; // Inject StatsService
 
-    // Queue holding retriable DLR items
     private final LinkedBlockingQueue<RetriableDlr> dlrQueue = new LinkedBlockingQueue<>(1_000_000);
 
     private static final int TARGET_DLRS_PER_SECOND = 50;
-    private static final int MAX_REQUEUE_ATTEMPTS = 3; // Capped to prevent infinite 30-min loops
+    private static final int MAX_REQUEUE_ATTEMPTS = 3;
 
     public void enqueueDlr(MetaWebhookPayload payload) {
         enqueueDlr(new RetriableDlr(payload));
@@ -33,7 +33,9 @@ public class DlrQueueService {
 
     private void enqueueDlr(RetriableDlr item) {
         boolean added = dlrQueue.offer(item);
-        if (!added) {
+        if (added) {
+            statsService.incrementDlrEnqueued(); // Track queue additions
+        } else {
             log.error("❌ DLR Buffer Queue is FULL! Dropping DLR payload.");
         }
     }
@@ -41,26 +43,29 @@ public class DlrQueueService {
     @PostConstruct
     public void startDlrQueueConsumer() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-        long delayMillis = 1000L / TARGET_DLRS_PER_SECOND; // ~20ms delay
+        long delayMillis = 1000L / TARGET_DLRS_PER_SECOND;
 
         executor.scheduleAtFixedRate(() -> {
             try {
                 RetriableDlr item = dlrQueue.poll();
                 if (item != null) {
                     webhookClient.sendWebhook(item.getPayload())
+                            .doOnSuccess(unused -> statsService.incrementDlrSuccessfullySent()) // Track successful delivery
                             .onErrorResume(error -> {
+                                statsService.incrementDlrFailedToSend(); // Track webhook failed attempt
                                 int attempts = item.incrementAttempt();
                                 if (attempts <= MAX_REQUEUE_ATTEMPTS) {
                                     log.warn("⚠️ Receiver refused connection. Re-queuing DLR (Attempt {}/{})",
                                             attempts, MAX_REQUEUE_ATTEMPTS);
                                     enqueueDlr(item);
                                 } else {
+                                    statsService.incrementDlrDiscarded(); // Track discarded DLRs
                                     log.error("❌ Max re-queue attempts ({}) reached. Discarding DLR to prevent infinite loop.",
                                             MAX_REQUEUE_ATTEMPTS);
                                 }
-                                return Mono.empty(); // Safely consumes error to prevent onErrorDropped
+                                return Mono.empty();
                             })
-                            .subscribe(); // Clean subscription with no unhandled errors
+                            .subscribe();
                 }
             } catch (Exception e) {
                 log.error("Error in DLR queue processor thread", e);
