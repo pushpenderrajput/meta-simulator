@@ -20,12 +20,11 @@ import java.util.concurrent.TimeUnit;
 public class DlrQueueService {
 
     private final WebhookClient webhookClient;
-    private final StatsService statsService; // Inject StatsService
-
     private final LinkedBlockingQueue<RetriableDlr> dlrQueue = new LinkedBlockingQueue<>(1_000_000);
 
-    private static final int TARGET_DLRS_PER_SECOND = 50;
-    private static final int MAX_REQUEUE_ATTEMPTS = 3;
+    // INCREASED SPEED: Send 500 DLRs/sec (2ms delay) instead of 50 DLRs/sec
+    private static final int TARGET_DLRS_PER_SECOND = 500;
+    private static final int MAX_REQUEUE_ATTEMPTS = 5;
 
     public void enqueueDlr(MetaWebhookPayload payload) {
         enqueueDlr(new RetriableDlr(payload));
@@ -33,9 +32,7 @@ public class DlrQueueService {
 
     private void enqueueDlr(RetriableDlr item) {
         boolean added = dlrQueue.offer(item);
-        if (added) {
-            statsService.incrementDlrEnqueued(); // Track queue additions
-        } else {
+        if (!added) {
             log.error("❌ DLR Buffer Queue is FULL! Dropping DLR payload.");
         }
     }
@@ -43,36 +40,32 @@ public class DlrQueueService {
     @PostConstruct
     public void startDlrQueueConsumer() {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-        long delayMillis = 1000L / TARGET_DLRS_PER_SECOND;
+        long delayMicros = 1_000_000L / TARGET_DLRS_PER_SECOND; // 2000 microseconds (2ms)
 
         executor.scheduleAtFixedRate(() -> {
             try {
                 RetriableDlr item = dlrQueue.poll();
                 if (item != null) {
                     webhookClient.sendWebhook(item.getPayload())
-                            .doOnSuccess(unused -> statsService.incrementDlrSuccessfullySent()) // Track successful delivery
                             .onErrorResume(error -> {
-                                statsService.incrementDlrFailedToSend(); // Track webhook failed attempt
                                 int attempts = item.incrementAttempt();
                                 if (attempts <= MAX_REQUEUE_ATTEMPTS) {
-                                    log.warn("⚠️ Receiver refused connection. Re-queuing DLR (Attempt {}/{})",
+                                    log.warn("⚠️ Receiver error. Re-queuing DLR (Attempt {}/{})",
                                             attempts, MAX_REQUEUE_ATTEMPTS);
                                     enqueueDlr(item);
                                 } else {
-                                    statsService.incrementDlrDiscarded(); // Track discarded DLRs
-                                    log.error("❌ Max re-queue attempts ({}) reached. Discarding DLR to prevent infinite loop.",
-                                            MAX_REQUEUE_ATTEMPTS);
+                                    log.error("❌ Max attempts reached. Discarding DLR.");
                                 }
                                 return Mono.empty();
                             })
                             .subscribe();
                 }
             } catch (Exception e) {
-                log.error("Error in DLR queue processor thread", e);
+                log.error("Error in DLR consumer thread", e);
             }
-        }, 0, delayMillis, TimeUnit.MILLISECONDS);
+        }, 0, delayMicros, TimeUnit.MICROSECONDS);
 
-        log.info("🚀 Resilient DLR Queue Consumer started at {} DLR/sec limit.", TARGET_DLRS_PER_SECOND);
+        log.info("🚀 High-Speed DLR Consumer started at {} DLR/sec.", TARGET_DLRS_PER_SECOND);
     }
 
     public int getQueueSize() {
