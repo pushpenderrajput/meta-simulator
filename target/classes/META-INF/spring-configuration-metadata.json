@@ -7,164 +7,162 @@
     },
     {
       "name": "simulator.api-version",
-      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$ApiVersion",
+      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$ApiVersionProperties",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
       "sourceMethod": "apiVersion()"
     },
     {
       "name": "simulator.auth",
-      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Auth",
+      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$AuthProperties",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
       "sourceMethod": "auth()"
     },
     {
       "name": "simulator.delays",
-      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Delays",
+      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$DelaysProperties",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
       "sourceMethod": "delays()"
     },
     {
       "name": "simulator.events",
-      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Events",
+      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$EventsProperties",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
       "sourceMethod": "events()"
     },
     {
       "name": "simulator.phone-number",
-      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$PhoneNumber",
+      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$PhoneNumberProperties",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
       "sourceMethod": "phoneNumber()"
     },
     {
       "name": "simulator.probability",
-      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Probability",
+      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$ProbabilityProperties",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
       "sourceMethod": "probability()"
     },
     {
       "name": "simulator.webhook",
-      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook",
+      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$WebhookProperties",
       "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties",
       "sourceMethod": "webhook()"
-    },
-    {
-      "name": "simulator.webhook.retry",
-      "type": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook$Retry",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook",
-      "sourceMethod": "retry()"
     }
   ],
   "properties": [
     {
       "name": "simulator.api-version.latest",
       "type": "java.lang.String",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$ApiVersion"
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$ApiVersionProperties"
     },
     {
       "name": "simulator.api-version.supported",
       "type": "java.util.List<java.lang.String>",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$ApiVersion"
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$ApiVersionProperties"
     },
     {
       "name": "simulator.auth.valid-tokens",
       "type": "java.util.List<java.lang.String>",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Auth"
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$AuthProperties"
     },
     {
       "name": "simulator.auth.verify-token",
       "type": "java.lang.String",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Auth"
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$AuthProperties"
     },
     {
       "name": "simulator.delays.delivered-seconds",
       "type": "java.lang.Integer",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Delays",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$DelaysProperties",
       "defaultValue": 0
     },
     {
       "name": "simulator.delays.read-seconds",
       "type": "java.lang.Integer",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Delays",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$DelaysProperties",
       "defaultValue": 0
     },
     {
       "name": "simulator.delays.sent-seconds",
       "type": "java.lang.Integer",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Delays",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$DelaysProperties",
       "defaultValue": 0
     },
     {
       "name": "simulator.events.delivered-enabled",
       "type": "java.lang.Boolean",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Events",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$EventsProperties",
       "defaultValue": false
     },
     {
       "name": "simulator.events.read-enabled",
       "type": "java.lang.Boolean",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Events",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$EventsProperties",
       "defaultValue": false
     },
     {
       "name": "simulator.events.sent-enabled",
       "type": "java.lang.Boolean",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Events",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$EventsProperties",
       "defaultValue": false
     },
     {
       "name": "simulator.phone-number.display-phone-number",
       "type": "java.lang.String",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$PhoneNumber"
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$PhoneNumberProperties"
     },
     {
       "name": "simulator.phone-number.phone-number-id",
       "type": "java.lang.String",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$PhoneNumber"
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$PhoneNumberProperties"
     },
     {
       "name": "simulator.probability.delivered",
       "type": "java.lang.Integer",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Probability",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$ProbabilityProperties",
       "defaultValue": 0
     },
     {
       "name": "simulator.probability.expired",
       "type": "java.lang.Integer",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Probability",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$ProbabilityProperties",
       "defaultValue": 0
     },
     {
       "name": "simulator.probability.failed",
       "type": "java.lang.Integer",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Probability",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$ProbabilityProperties",
       "defaultValue": 0
     },
     {
       "name": "simulator.webhook.callback-url",
       "type": "java.lang.String",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook"
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$WebhookProperties"
     },
     {
-      "name": "simulator.webhook.retry.backoff-seconds",
-      "type": "java.util.List<java.lang.Integer>",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook$Retry"
+      "name": "simulator.webhook.default-callback-url",
+      "type": "java.lang.String",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$WebhookProperties"
     },
     {
-      "name": "simulator.webhook.retry.max-attempts",
-      "type": "java.lang.Integer",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook$Retry",
-      "defaultValue": 0
+      "name": "simulator.webhook.sender-route-pairs",
+      "type": "java.lang.String",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$WebhookProperties"
+    },
+    {
+      "name": "simulator.webhook.sender-routes",
+      "type": "java.util.Map<java.lang.String,java.lang.String>",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$WebhookProperties"
     },
     {
       "name": "simulator.webhook.timeout-seconds",
       "type": "java.lang.Integer",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook",
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$WebhookProperties",
       "defaultValue": 0
     },
     {
       "name": "simulator.webhook.whatsapp-business-account-id",
       "type": "java.lang.String",
-      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$Webhook"
+      "sourceType": "com.simulator.metawhatsapp.properties.SimulatorProperties$WebhookProperties"
     }
   ],
   "hints": []
