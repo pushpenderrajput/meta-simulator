@@ -10,6 +10,7 @@ import com.simulator.metawhatsapp.service.StatsService;
 import com.simulator.metawhatsapp.util.TimestampUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 
@@ -24,7 +25,10 @@ public class WebhookDispatcher {
     private final ThreadPoolTaskScheduler webhookTaskScheduler;
     private final DlrQueueService dlrQueueService;
     private final SimulatorProperties properties;
-    private final StatsService statsService; // Inject StatsService
+    private final StatsService statsService;
+
+    @Value("${simulator.webhook.callback-urls}")
+    private List<String> callbackUrls;
 
     public void scheduleMessageLifecycle(String wamid, String recipientId) {
         log.debug("Scheduling lifecycle stages for wamid={} to recipientId={}", wamid, recipientId);
@@ -51,7 +55,6 @@ public class WebhookDispatcher {
     private void dispatchStatus(String wamid, String recipientId, String statusName) {
         log.info("🚀 DISPATCHING OUTBOUND DLR -> status={} wamid={}", statusName, wamid);
 
-        // Track the lifecycle status metric
         statsService.incrementDlrStatus(statusName);
 
         Metadata metadata = new Metadata(
@@ -78,6 +81,12 @@ public class WebhookDispatcher {
                 changeValue
         );
 
-        dlrQueueService.enqueueDlr(payload);
+        // Fan out DLR payload to all configured target callback URLs
+        for (String url : callbackUrls) {
+            String targetUrl = url.trim();
+            if (!targetUrl.isEmpty()) {
+                dlrQueueService.enqueueDlr(targetUrl, payload);
+            }
+        }
     }
 }

@@ -1,7 +1,6 @@
 package com.simulator.metawhatsapp.client;
 
 import com.simulator.metawhatsapp.dto.webhook.MetaWebhookPayload;
-import com.simulator.metawhatsapp.properties.SimulatorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -18,11 +17,8 @@ import java.time.Duration;
 public class WebhookClient {
 
     private final WebClient webhookWebClient;
-    private final SimulatorProperties properties;
 
-    public Mono<Void> sendWebhook(MetaWebhookPayload payload) {
-        String targetUrl = properties.webhook().callbackUrl();
-
+    public Mono<Void> sendWebhook(String targetUrl, MetaWebhookPayload payload) {
         return webhookWebClient.post()
                 .uri(targetUrl)
                 .contentType(MediaType.APPLICATION_JSON)
