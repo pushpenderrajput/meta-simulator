@@ -22,18 +22,18 @@ public class DlrQueueService {
     private final WebhookClient webhookClient;
     private final LinkedBlockingQueue<RetriableDlr> dlrQueue = new LinkedBlockingQueue<>(1_000_000);
 
-    // INCREASED SPEED: Send 500 DLRs/sec (2ms delay) instead of 50 DLRs/sec
     private static final int TARGET_DLRS_PER_SECOND = 500;
     private static final int MAX_REQUEUE_ATTEMPTS = 5;
 
-    public void enqueueDlr(MetaWebhookPayload payload) {
-        enqueueDlr(new RetriableDlr(payload));
+    // Enqueue with destination targetUrl
+    public void enqueueDlr(String callbackUrl, MetaWebhookPayload payload) {
+        enqueueDlr(new RetriableDlr(callbackUrl, payload));
     }
 
     private void enqueueDlr(RetriableDlr item) {
         boolean added = dlrQueue.offer(item);
         if (!added) {
-            log.error("❌ DLR Buffer Queue is FULL! Dropping DLR payload.");
+            log.error("❌ DLR Buffer Queue is FULL! Dropping DLR payload for {}", item.getCallbackUrl());
         }
     }
 
@@ -46,15 +46,16 @@ public class DlrQueueService {
             try {
                 RetriableDlr item = dlrQueue.poll();
                 if (item != null) {
-                    webhookClient.sendWebhook(item.getPayload())
+                    // Pass the item's specific callback URL to WebhookClient
+                    webhookClient.sendWebhook(item.getCallbackUrl(), item.getPayload())
                             .onErrorResume(error -> {
                                 int attempts = item.incrementAttempt();
                                 if (attempts <= MAX_REQUEUE_ATTEMPTS) {
-                                    log.warn("⚠️ Receiver error. Re-queuing DLR (Attempt {}/{})",
-                                            attempts, MAX_REQUEUE_ATTEMPTS);
+                                    log.warn("⚠️ Receiver error for {}. Re-queuing DLR (Attempt {}/{})",
+                                            item.getCallbackUrl(), attempts, MAX_REQUEUE_ATTEMPTS);
                                     enqueueDlr(item);
                                 } else {
-                                    log.error("❌ Max attempts reached. Discarding DLR.");
+                                    log.error("❌ Max attempts reached for {}. Discarding DLR.", item.getCallbackUrl());
                                 }
                                 return Mono.empty();
                             })
