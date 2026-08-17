@@ -43,10 +43,32 @@ public class MessageService {
     }
 
     private String resolveCallbackUrl(String phoneNumberId) {
+
         Map<String, String> routes = properties.webhook().senderRoutes();
+
+        log.info("========== CALLBACK ROUTING ==========");
+        log.info("Incoming Sender ID : {}", phoneNumberId);
+        log.info("Configured Routes  : {}", routes);
+
         if (routes != null && routes.containsKey(phoneNumberId)) {
-            return routes.get(phoneNumberId);
+
+            String callbackUrl = routes.get(phoneNumberId);
+
+            log.info("✅ ROUTE MATCHED");
+            log.info("Sender ID         : {}", phoneNumberId);
+            log.info("Callback URL      : {}", callbackUrl);
+            log.info("======================================");
+
+            return callbackUrl;
         }
-        return properties.webhook().defaultCallbackUrl();
+
+        String defaultUrl = properties.webhook().defaultCallbackUrl();
+
+        log.warn("⚠️ ROUTE NOT FOUND");
+        log.warn("Sender ID         : {}", phoneNumberId);
+        log.warn("Using Default URL : {}", defaultUrl);
+        log.info("======================================");
+
+        return defaultUrl;
     }
 }
