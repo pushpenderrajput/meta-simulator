@@ -5,11 +5,14 @@ import com.simulator.metawhatsapp.dto.response.ContactResponse;
 import com.simulator.metawhatsapp.dto.response.MessageIdResponse;
 import com.simulator.metawhatsapp.dto.response.SendMessageResponse;
 import com.simulator.metawhatsapp.generator.WamidGenerator;
+import com.simulator.metawhatsapp.properties.SimulatorProperties;
 import com.simulator.metawhatsapp.util.PhoneNumberUtil;
 import com.simulator.metawhatsapp.webhook.WebhookDispatcher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -18,20 +21,32 @@ public class MessageService {
 
     private final WamidGenerator wamidGenerator;
     private final WebhookDispatcher webhookDispatcher;
-    private final DlrQueueService dlrQueueService; // Injected to support queued/throttled DLR dispatching
+    private final SimulatorProperties properties;
 
-    // Inside MessageService.java
     public SendMessageResponse acceptMessage(String phoneNumberId, SendMessageRequest request) {
         String waId = PhoneNumberUtil.toWaId(request.to());
         String wamid = wamidGenerator.generate();
 
-        // Changed from log.debug to log.info
-        log.info("📥 INBOUND REQUEST ACCEPTED -> type={} to={} wamid={}", request.type(), request.to(), wamid);
+        // 1. Resolve the specific target URL for this sender ID
+        String targetCallbackUrl = resolveCallbackUrl(phoneNumberId);
 
-        webhookDispatcher.scheduleMessageLifecycle(wamid, waId);
+        log.info("📥 INBOUND REQUEST ACCEPTED -> senderId={} to={} wamid={} targetCallbackUrl={}",
+                phoneNumberId, request.to(), wamid, targetCallbackUrl);
+
+        // 2. Schedule DLR lifecycle targeted specifically to that callback URL
+        webhookDispatcher.scheduleMessageLifecycle(wamid, waId, phoneNumberId, targetCallbackUrl);
 
         ContactResponse contact = new ContactResponse(request.to(), waId);
         MessageIdResponse message = MessageIdResponse.withoutStatus(wamid);
 
         return SendMessageResponse.of(contact, message);
-    }}
+    }
+
+    private String resolveCallbackUrl(String phoneNumberId) {
+        Map<String, String> routes = properties.webhook().senderRoutes();
+        if (routes != null && routes.containsKey(phoneNumberId)) {
+            return routes.get(phoneNumberId);
+        }
+        return properties.webhook().defaultCallbackUrl();
+    }
+}

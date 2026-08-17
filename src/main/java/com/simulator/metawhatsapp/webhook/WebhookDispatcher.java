@@ -8,15 +8,12 @@ import com.simulator.metawhatsapp.properties.SimulatorProperties;
 import com.simulator.metawhatsapp.service.DlrQueueService;
 import com.simulator.metawhatsapp.service.StatsService;
 import com.simulator.metawhatsapp.util.TimestampUtil;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 
 @Slf4j
@@ -29,50 +26,32 @@ public class WebhookDispatcher {
     private final SimulatorProperties properties;
     private final StatsService statsService;
 
-    @Value("${simulator.webhook.callback-urls}")
-    private String rawCallbackUrls;
-
-    private List<String> targetUrls;
-
-    @PostConstruct
-    public void init() {
-        // Parse and clean comma-separated URLs safely
-        this.targetUrls = Arrays.stream(rawCallbackUrls.split(","))
-                .map(String::trim)
-                .filter(url -> !url.isEmpty())
-                .toList();
-
-        log.info("🎯 WebhookDispatcher initialized with {} target URLs:", targetUrls.size());
-        targetUrls.forEach(url -> log.info("   👉 Target: {}", url));
-    }
-
-    public void scheduleMessageLifecycle(String wamid, String recipientId) {
-        log.debug("Scheduling lifecycle stages for wamid={} to recipientId={}", wamid, recipientId);
-
+    public void scheduleMessageLifecycle(String wamid, String recipientId, String senderId, String callbackUrl) {
         if (properties.events().sentEnabled()) {
             Instant sentTime = Instant.now().plusSeconds(properties.delays().sentSeconds());
-            webhookTaskScheduler.schedule(() -> dispatchStatus(wamid, recipientId, "sent"), sentTime);
+            webhookTaskScheduler.schedule(() -> dispatchStatus(wamid, recipientId, senderId, "sent", callbackUrl), sentTime);
         }
 
         if (properties.events().deliveredEnabled()) {
             Instant deliveredTime = Instant.now().plusSeconds(properties.delays().deliveredSeconds());
-            webhookTaskScheduler.schedule(() -> dispatchStatus(wamid, recipientId, "delivered"), deliveredTime);
+            webhookTaskScheduler.schedule(() -> dispatchStatus(wamid, recipientId, senderId, "delivered", callbackUrl), deliveredTime);
         }
 
         if (properties.events().readEnabled()) {
             Instant readTime = Instant.now().plusSeconds(properties.delays().readSeconds());
-            webhookTaskScheduler.schedule(() -> dispatchStatus(wamid, recipientId, "read"), readTime);
+            webhookTaskScheduler.schedule(() -> dispatchStatus(wamid, recipientId, senderId, "read", callbackUrl), readTime);
         }
     }
 
-    private void dispatchStatus(String wamid, String recipientId, String statusName) {
-        log.info("🚀 DISPATCHING OUTBOUND DLR -> status={} wamid={}", statusName, wamid);
+    private void dispatchStatus(String wamid, String recipientId, String senderId, String statusName, String callbackUrl) {
+        log.info("🚀 DISPATCHING OUTBOUND DLR -> status={} wamid={} senderId={} targetUrl={}",
+                statusName, wamid, senderId, callbackUrl);
 
         statsService.incrementDlrStatus(statusName);
 
         Metadata metadata = new Metadata(
                 properties.phoneNumber().displayPhoneNumber(),
-                properties.phoneNumber().phoneNumberId()
+                senderId
         );
 
         StatusDetail statusDetail = new StatusDetail(
@@ -94,9 +73,7 @@ public class WebhookDispatcher {
                 changeValue
         );
 
-        // Fan out DLR payload to ALL target callback URLs
-        for (String url : targetUrls) {
-            dlrQueueService.enqueueDlr(url, payload);
-        }
+        // Enqueue only to the specific caller's callback URL
+        dlrQueueService.enqueueDlr(callbackUrl, payload);
     }
 }
