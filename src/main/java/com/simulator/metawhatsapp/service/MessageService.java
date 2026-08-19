@@ -46,18 +46,18 @@ public class MessageService {
 
         Map<String, String> routes = properties.webhook().senderRoutes();
 
-        log.info("========== CALLBACK ROUTING ==========");
-        log.info("Incoming Sender ID : {}", phoneNumberId);
-        log.info("Configured Routes  : {}", routes);
+//        log.info("========== CALLBACK ROUTING ==========");
+//        log.info("Incoming Sender ID : {}", phoneNumberId);
+//        log.info("Configured Routes  : {}", routes);
 
         if (routes != null && routes.containsKey(phoneNumberId)) {
 
             String callbackUrl = routes.get(phoneNumberId);
 
-            log.info("✅ ROUTE MATCHED");
-            log.info("Sender ID         : {}", phoneNumberId);
-            log.info("Callback URL      : {}", callbackUrl);
-            log.info("======================================");
+//            log.info("✅ ROUTE MATCHED");
+//            log.info("Sender ID         : {}", phoneNumberId);
+//            log.info("Callback URL      : {}", callbackUrl);
+//            log.info("======================================");
 
             return callbackUrl;
         }
