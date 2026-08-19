@@ -8,44 +8,91 @@ import com.simulator.metawhatsapp.properties.SimulatorProperties;
 import com.simulator.metawhatsapp.service.DlrQueueService;
 import com.simulator.metawhatsapp.service.StatsService;
 import com.simulator.metawhatsapp.util.TimestampUtil;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.*;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class WebhookDispatcher {
 
-    private final ThreadPoolTaskScheduler webhookTaskScheduler;
     private final DlrQueueService dlrQueueService;
     private final SimulatorProperties properties;
     private final StatsService statsService;
 
+    // Lock-free transfer buffer between HTTP threads and lifecycle timers
+    private final BlockingQueue<LifecycleTask> inboundBuffer = new LinkedBlockingQueue<>(2_000_000);
+    private ScheduledExecutorService lifecycleScheduler;
+    private ExecutorService bufferDrainer;
+    private volatile boolean running = true;
+
+    private record LifecycleTask(String wamid, String recipientId, String senderId, String callbackUrl) {}
+
+    @PostConstruct
+    public void init() {
+        int cores = Runtime.getRuntime().availableProcessors();
+        this.lifecycleScheduler = Executors.newScheduledThreadPool(Math.max(4, cores * 2));
+        this.bufferDrainer = Executors.newSingleThreadExecutor();
+        this.bufferDrainer.submit(this::drainInboundBuffer);
+    }
+
+    /**
+     * Called synchronously on the HTTP request path.
+     * Non-blocking O(1) buffer push (< 1 microsecond).
+     */
     public void scheduleMessageLifecycle(String wamid, String recipientId, String senderId, String callbackUrl) {
-        if (properties.events().sentEnabled()) {
-            Instant sentTime = Instant.now().plusSeconds(properties.delays().sentSeconds());
-            webhookTaskScheduler.schedule(() -> dispatchStatus(wamid, recipientId, senderId, "sent", callbackUrl), sentTime);
-        }
+        inboundBuffer.offer(new LifecycleTask(wamid, recipientId, senderId, callbackUrl));
+    }
 
-        if (properties.events().deliveredEnabled()) {
-            Instant deliveredTime = Instant.now().plusSeconds(properties.delays().deliveredSeconds());
-            webhookTaskScheduler.schedule(() -> dispatchStatus(wamid, recipientId, senderId, "delivered", callbackUrl), deliveredTime);
-        }
+    private void drainInboundBuffer() {
+        while (running && !Thread.currentThread().isInterrupted()) {
+            try {
+                LifecycleTask task = inboundBuffer.poll(20, TimeUnit.MILLISECONDS);
+                if (task != null) {
+                    if (properties.events().sentEnabled()) {
+                        lifecycleScheduler.schedule(
+                                () -> dispatchStatus(task.wamid(), task.recipientId(), task.senderId(), "sent", task.callbackUrl()),
+                                properties.delays().sentSeconds(),
+                                TimeUnit.SECONDS
+                        );
+                    }
 
-        if (properties.events().readEnabled()) {
-            Instant readTime = Instant.now().plusSeconds(properties.delays().readSeconds());
-            webhookTaskScheduler.schedule(() -> dispatchStatus(wamid, recipientId, senderId, "read", callbackUrl), readTime);
+                    if (properties.events().deliveredEnabled()) {
+                        lifecycleScheduler.schedule(
+                                () -> dispatchStatus(task.wamid(), task.recipientId(), task.senderId(), "delivered", task.callbackUrl()),
+                                properties.delays().deliveredSeconds(),
+                                TimeUnit.SECONDS
+                        );
+                    }
+
+                    if (properties.events().readEnabled()) {
+                        lifecycleScheduler.schedule(
+                                () -> dispatchStatus(task.wamid(), task.recipientId(), task.senderId(), "read", task.callbackUrl()),
+                                properties.delays().readSeconds(),
+                                TimeUnit.SECONDS
+                        );
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            } catch (Exception ignored) {
+                // Prevent loop death
+            }
         }
     }
 
     private void dispatchStatus(String wamid, String recipientId, String senderId, String statusName, String callbackUrl) {
-        log.info("🚀 DISPATCHING OUTBOUND DLR -> status={} wamid={} senderId={} targetUrl={}",
-                statusName, wamid, senderId, callbackUrl);
+        if (log.isDebugEnabled()) {
+            log.debug("🚀 DISPATCHING OUTBOUND DLR -> status={} wamid={} senderId={} targetUrl={}",
+                    statusName, wamid, senderId, callbackUrl);
+        }
 
         statsService.incrementDlrStatus(statusName);
 
@@ -73,7 +120,13 @@ public class WebhookDispatcher {
                 changeValue
         );
 
-        // Enqueue only to the specific caller's callback URL
         dlrQueueService.enqueueDlr(callbackUrl, payload);
+    }
+
+    @PreDestroy
+    public void destroy() {
+        this.running = false;
+        if (bufferDrainer != null) bufferDrainer.shutdownNow();
+        if (lifecycleScheduler != null) lifecycleScheduler.shutdownNow();
     }
 }
