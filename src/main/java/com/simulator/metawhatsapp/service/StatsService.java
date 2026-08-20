@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -15,8 +16,9 @@ public class StatsService {
 
     private final DlrQueueService dlrQueueService;
 
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_INSTANT.withZone(ZoneId.systemDefault());
-
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter
+            .ofPattern("dd MMMM yyyy, hh:mm:ss.SSS a", Locale.ENGLISH)
+            .withZone(ZoneId.of("Asia/Kolkata"));
     // Request Counters
     private final LongAdder incomingRequests = new LongAdder();
     private final LongAdder successRequests = new LongAdder();
