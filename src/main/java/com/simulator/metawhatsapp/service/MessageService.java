@@ -13,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,7 +24,7 @@ public class MessageService {
     private final WamidGenerator wamidGenerator;
     private final WebhookDispatcher webhookDispatcher;
     private final SimulatorProperties properties;
-    private final StatsService statsService;
+
     private final Map<String, String> cachedRoutes = new ConcurrentHashMap<>();
     private String defaultCallbackUrl;
 
@@ -39,15 +38,11 @@ public class MessageService {
     }
 
     public SendMessageResponse acceptMessage(String phoneNumberId, SendMessageRequest request) {
-        statsService.recordIncomingMessage();
-
         String waId = PhoneNumberUtil.toWaId(request.to());
         String wamid = wamidGenerator.generate();
         String targetCallbackUrl = cachedRoutes.getOrDefault(phoneNumberId, defaultCallbackUrl);
 
         webhookDispatcher.scheduleMessageLifecycle(wamid, waId, phoneNumberId, targetCallbackUrl);
-
-        statsService.incrementSuccessRequests();
 
         ContactResponse contact = new ContactResponse(request.to(), waId);
         MessageIdResponse message = MessageIdResponse.withoutStatus(wamid);
