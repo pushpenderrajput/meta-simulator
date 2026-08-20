@@ -45,8 +45,8 @@ public class MessageService {
         String targetCallbackUrl = cachedRoutes.getOrDefault(phoneNumberId, defaultCallbackUrl);
 
         if (log.isDebugEnabled()) {
-            log.debug("📥 INBOUND ACCEPTED -> senderId={} to={} wamid={} targetCallbackUrl={}",
-                    phoneNumberId, request.to(), wamid, targetCallbackUrl);
+            log.debug("INBOUND ACCEPTED -> senderId={} to={} wamid={}",
+                    phoneNumberId, request.to(), wamid);
         }
 
         webhookDispatcher.scheduleMessageLifecycle(wamid, waId, phoneNumberId, targetCallbackUrl);
