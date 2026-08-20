@@ -86,7 +86,7 @@ public class WebhookDispatcher {
     }
 
     private void dispatchStatus(String wamid, String recipientId, String senderId, String statusName, String callbackUrl) {
-        
+
 
         statsService.incrementDlrStatus(statusName);
 
