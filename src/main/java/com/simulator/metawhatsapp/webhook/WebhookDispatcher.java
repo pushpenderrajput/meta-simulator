@@ -42,7 +42,7 @@ public class WebhookDispatcher {
         this.bufferDrainer.submit(this::drainInboundBuffer);
     }
 
-    
+
     public void scheduleMessageLifecycle(String wamid, String recipientId, String senderId, String callbackUrl) {
         inboundBuffer.offer(new LifecycleTask(wamid, recipientId, senderId, callbackUrl));
     }
@@ -86,10 +86,7 @@ public class WebhookDispatcher {
     }
 
     private void dispatchStatus(String wamid, String recipientId, String senderId, String statusName, String callbackUrl) {
-        if (log.isDebugEnabled()) {
-            log.debug("DISPATCHING DLR -> status={} wamid={} senderId={} targetUrl={}",
-                    statusName, wamid, senderId, callbackUrl);
-        }
+        
 
         statsService.incrementDlrStatus(statusName);
 

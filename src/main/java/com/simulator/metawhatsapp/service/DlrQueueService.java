@@ -66,7 +66,7 @@ public class DlrQueueService {
             }
         }, 0, delayMicros, TimeUnit.MICROSECONDS);
 
-        log.info("🚀 High-Speed DLR Consumer started at {} DLR/sec.", TARGET_DLRS_PER_SECOND);
+//        log.info("🚀 High-Speed DLR Consumer started at {} DLR/sec.", TARGET_DLRS_PER_SECOND);
     }
 
     public int getQueueSize() {
