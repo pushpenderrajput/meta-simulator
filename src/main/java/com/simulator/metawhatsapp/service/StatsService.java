@@ -4,6 +4,10 @@ import com.simulator.metawhatsapp.dto.response.StatsResponse;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 
 @Service
@@ -11,12 +15,18 @@ public class StatsService {
 
     private final DlrQueueService dlrQueueService;
 
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_INSTANT.withZone(ZoneId.systemDefault());
+
     // Request Counters
     private final LongAdder incomingRequests = new LongAdder();
     private final LongAdder successRequests = new LongAdder();
     private final LongAdder failedRequests = new LongAdder();
 
-    // DLR Status Lifecycle Counters
+    // Timestamps
+    private final AtomicReference<Instant> firstMessageTime = new AtomicReference<>(null);
+    private final AtomicReference<Instant> lastMessageTime = new AtomicReference<>(null);
+
+    // DLR Lifecycle Counters
     private final LongAdder dlrSent = new LongAdder();
     private final LongAdder dlrDelivered = new LongAdder();
     private final LongAdder dlrRead = new LongAdder();
@@ -28,17 +38,23 @@ public class StatsService {
     private final LongAdder dlrFailedToSend = new LongAdder();
     private final LongAdder dlrDiscarded = new LongAdder();
 
-    // Explicit constructor with @Lazy to break the circular dependency loop
     public StatsService(@Lazy DlrQueueService dlrQueueService) {
         this.dlrQueueService = dlrQueueService;
     }
 
     // --- Metric Incrementors ---
-    public void incrementIncomingRequests() { incomingRequests.increment(); }
+    public void recordIncomingMessage() {
+        Instant now = Instant.now();
+        firstMessageTime.compareAndSet(null, now);
+        lastMessageTime.set(now);
+        incomingRequests.increment();
+    }
+
     public void incrementSuccessRequests() { successRequests.increment(); }
     public void incrementFailedRequests() { failedRequests.increment(); }
 
-    public void incrementDlrStatus(String statusName) {
+    public void recordDlrDelivered(String statusName) {
+        dlrSuccessfullySent.increment();
         if (statusName == null) return;
         switch (statusName.toLowerCase()) {
             case "sent" -> dlrSent.increment();
@@ -47,19 +63,39 @@ public class StatsService {
             case "failed" -> dlrFailed.increment();
         }
     }
-
+    public void incrementDlrStatus(String statusName) {
+        recordDlrDelivered(statusName);
+    }
     public void incrementDlrEnqueued() { dlrEnqueued.increment(); }
-    public void incrementDlrSuccessfullySent() { dlrSuccessfullySent.increment(); }
     public void incrementDlrFailedToSend() { dlrFailedToSend.increment(); }
     public void incrementDlrDiscarded() { dlrDiscarded.increment(); }
 
     // --- Get Current Stats ---
     public StatsResponse getStats() {
+        long totalInc = incomingRequests.sum();
+        Instant first = firstMessageTime.get();
+        Instant last = lastMessageTime.get();
+
+        double tps = 0.0;
+        long durationSec = 0;
+
+        if (first != null && last != null) {
+            long durationMillis = Math.max(1, java.time.Duration.between(first, last).toMillis());
+            durationSec = durationMillis / 1000;
+            tps = (double) totalInc / (durationMillis / 1000.0);
+        }
+
         return StatsResponse.builder()
                 .requests(StatsResponse.RequestStats.builder()
-                        .totalIncoming(incomingRequests.sum())
+                        .totalIncoming(totalInc)
                         .totalSuccess(successRequests.sum())
                         .totalFailed(failedRequests.sum())
+                        .firstMessageTimestamp(first != null ? FORMATTER.format(first) : null)
+                        .lastMessageTimestamp(last != null ? FORMATTER.format(last) : null)
+                        .build())
+                .performance(StatsResponse.PerformanceStats.builder()
+                        .inboundTps(Math.round(tps * 100.0) / 100.0)
+                        .activeDurationSeconds(durationSec)
                         .build())
                 .dlr(StatsResponse.DlrStats.builder()
                         .pendingInQueue(dlrQueueService.getQueueSize())
@@ -75,11 +111,14 @@ public class StatsService {
                 .build();
     }
 
-    // --- Reset/Refresh Stats ---
+    // --- Reset Stats ---
     public StatsResponse resetStats() {
         incomingRequests.reset();
         successRequests.reset();
         failedRequests.reset();
+
+        firstMessageTime.set(null);
+        lastMessageTime.set(null);
 
         dlrSent.reset();
         dlrDelivered.reset();

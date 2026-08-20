@@ -25,7 +25,7 @@ public class MessageService {
     private final WamidGenerator wamidGenerator;
     private final WebhookDispatcher webhookDispatcher;
     private final SimulatorProperties properties;
-
+    private final StatsService statsService;
     private final Map<String, String> cachedRoutes = new ConcurrentHashMap<>();
     private String defaultCallbackUrl;
 
@@ -39,17 +39,15 @@ public class MessageService {
     }
 
     public SendMessageResponse acceptMessage(String phoneNumberId, SendMessageRequest request) {
+        statsService.recordIncomingMessage();
+
         String waId = PhoneNumberUtil.toWaId(request.to());
         String wamid = wamidGenerator.generate();
-
         String targetCallbackUrl = cachedRoutes.getOrDefault(phoneNumberId, defaultCallbackUrl);
 
-        if (log.isDebugEnabled()) {
-            log.debug("INBOUND ACCEPTED -> senderId={} to={} wamid={}",
-                    phoneNumberId, request.to(), wamid);
-        }
-
         webhookDispatcher.scheduleMessageLifecycle(wamid, waId, phoneNumberId, targetCallbackUrl);
+
+        statsService.incrementSuccessRequests();
 
         ContactResponse contact = new ContactResponse(request.to(), waId);
         MessageIdResponse message = MessageIdResponse.withoutStatus(wamid);

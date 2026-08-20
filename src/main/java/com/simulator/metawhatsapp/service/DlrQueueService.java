@@ -21,7 +21,7 @@ public class DlrQueueService {
 
     private final WebhookClient webhookClient;
     private final LinkedBlockingQueue<RetriableDlr> dlrQueue = new LinkedBlockingQueue<>(1_000_000);
-
+    private final StatsService statsService;
     private static final int TARGET_DLRS_PER_SECOND = 500;
     private static final int MAX_REQUEUE_ATTEMPTS = 5;
 
@@ -32,7 +32,9 @@ public class DlrQueueService {
 
     private void enqueueDlr(RetriableDlr item) {
         boolean added = dlrQueue.offer(item);
-        if (!added) {
+        if (added) {
+            statsService.incrementDlrEnqueued();
+        } else {
             log.error("❌ DLR Buffer Queue is FULL! Dropping DLR payload for {}", item.getCallbackUrl());
         }
     }
@@ -55,6 +57,7 @@ public class DlrQueueService {
                                             item.getCallbackUrl(), attempts, MAX_REQUEUE_ATTEMPTS);
                                     enqueueDlr(item);
                                 } else {
+                                    statsService.incrementDlrDiscarded();
                                     log.error("❌ Max attempts reached for {}. Discarding DLR.", item.getCallbackUrl());
                                 }
                                 return Mono.empty();

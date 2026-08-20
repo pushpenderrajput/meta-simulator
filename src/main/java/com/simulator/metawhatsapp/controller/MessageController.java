@@ -32,7 +32,7 @@ public class MessageController {
             @PathVariable String phoneNumberId,
             @RequestBody SendMessageRequest request) {
 
-        statsService.incrementIncomingRequests(); // Increment incoming
+        statsService.recordIncomingMessage();// Increment incoming
 
         try {
             log.debug("Incoming send-message request: version={} phoneNumberId={} type={}",

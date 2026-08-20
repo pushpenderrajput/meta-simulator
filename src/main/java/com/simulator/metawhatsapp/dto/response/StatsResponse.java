@@ -1,43 +1,44 @@
 package com.simulator.metawhatsapp.dto.response;
 
-import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.Getter;
 
-@Data
+@Getter
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class StatsResponse {
+
     private RequestStats requests;
     private DlrStats dlr;
+    private PerformanceStats performance;
 
-    @Data
+    @Getter
     @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
     public static class RequestStats {
         private long totalIncoming;
         private long totalSuccess;
         private long totalFailed;
+        private String firstMessageTimestamp;
+        private String lastMessageTimestamp;
     }
 
-    @Data
+    @Getter
     @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class DlrStats {
-        private long pendingInQueue;
-        private long totalEnqueued;
+    public static class PerformanceStats {
+        private double inboundTps;
+        private long activeDurationSeconds;
+    }
 
-        // DLR Lifecycle Status Counters
+    @Getter
+    @Builder
+    public static class DlrStats {
+        private int pendingInQueue;
+        private long totalEnqueued;
         private long sent;
         private long delivered;
         private long read;
         private long failed;
-
-        // Webhook Delivery Transport Counters
         private long successfullySent;
         private long failedToSend;
         private long maxAttemptsDiscarded;
