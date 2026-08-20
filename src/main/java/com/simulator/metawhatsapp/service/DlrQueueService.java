@@ -4,15 +4,13 @@ import com.simulator.metawhatsapp.client.WebhookClient;
 import com.simulator.metawhatsapp.dto.webhook.MetaWebhookPayload;
 import com.simulator.metawhatsapp.dto.webhook.RetriableDlr;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 @Slf4j
 @Service
@@ -20,59 +18,75 @@ import java.util.concurrent.TimeUnit;
 public class DlrQueueService {
 
     private final WebhookClient webhookClient;
-    private final LinkedBlockingQueue<RetriableDlr> dlrQueue = new LinkedBlockingQueue<>(1_000_000);
     private final StatsService statsService;
-    private static final int TARGET_DLRS_PER_SECOND = 500;
-    private static final int MAX_REQUEUE_ATTEMPTS = 5;
 
-    // Enqueue with destination targetUrl
+    // 10M item capacity to support massive continuous load
+    private final BlockingQueue<RetriableDlr> dlrQueue = new LinkedBlockingQueue<>(10_000_000);
+
+    private static final int MAX_REQUEUE_ATTEMPTS = 5;
+    private ExecutorService dispatchWorkers;
+    private volatile boolean running = true;
+
     public void enqueueDlr(String callbackUrl, MetaWebhookPayload payload) {
         enqueueDlr(new RetriableDlr(callbackUrl, payload));
     }
 
     private void enqueueDlr(RetriableDlr item) {
+        // High-concurrency offer with immediate fallback tracking
         boolean added = dlrQueue.offer(item);
         if (added) {
             statsService.incrementDlrEnqueued();
         } else {
-            log.error("❌ DLR Buffer Queue is FULL! Dropping DLR payload for {}", item.getCallbackUrl());
+            log.error("❌ Critical: DLR Buffer Queue is completely saturated! Target: {}", item.getCallbackUrl());
         }
     }
 
     @PostConstruct
-    public void startDlrQueueConsumer() {
-        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
-        long delayMicros = 1_000_000L / TARGET_DLRS_PER_SECOND; // 2000 microseconds (2ms)
+    public void startDlrConsumers() {
+        int workerCount = Math.max(8, Runtime.getRuntime().availableProcessors() * 4);
+        this.dispatchWorkers = Executors.newFixedThreadPool(workerCount);
 
-        executor.scheduleAtFixedRate(() -> {
+        for (int i = 0; i < workerCount; i++) {
+            dispatchWorkers.submit(this::processQueue);
+        }
+    }
+
+    private void processQueue() {
+        while (running && !Thread.currentThread().isInterrupted()) {
             try {
-                RetriableDlr item = dlrQueue.poll();
+                RetriableDlr item = dlrQueue.poll(50, TimeUnit.MILLISECONDS);
                 if (item != null) {
-                    // Pass the item's specific callback URL to WebhookClient
                     webhookClient.sendWebhook(item.getCallbackUrl(), item.getPayload())
                             .onErrorResume(error -> {
                                 int attempts = item.incrementAttempt();
                                 if (attempts <= MAX_REQUEUE_ATTEMPTS) {
-                                    log.warn("⚠️ Receiver error for {}. Re-queuing DLR (Attempt {}/{})",
-                                            item.getCallbackUrl(), attempts, MAX_REQUEUE_ATTEMPTS);
                                     enqueueDlr(item);
                                 } else {
                                     statsService.incrementDlrDiscarded();
-                                    log.error("❌ Max attempts reached for {}. Discarding DLR.", item.getCallbackUrl());
+                                    log.error("❌ Max retry attempts ({}) exhausted for {}", MAX_REQUEUE_ATTEMPTS, item.getCallbackUrl());
                                 }
                                 return Mono.empty();
                             })
                             .subscribe();
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             } catch (Exception e) {
-                log.error("Error in DLR consumer thread", e);
+                log.error("Unexpected worker exception", e);
             }
-        }, 0, delayMicros, TimeUnit.MICROSECONDS);
-
-//        log.info("🚀 High-Speed DLR Consumer started at {} DLR/sec.", TARGET_DLRS_PER_SECOND);
+        }
     }
 
     public int getQueueSize() {
         return dlrQueue.size();
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        this.running = false;
+        if (dispatchWorkers != null) {
+            dispatchWorkers.shutdownNow();
+        }
     }
 }

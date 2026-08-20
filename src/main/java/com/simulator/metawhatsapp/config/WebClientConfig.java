@@ -18,19 +18,23 @@ public class WebClientConfig {
 
     @Bean
     public WebClient webhookWebClient() {
-        // Create an aggressive connection pool for high-throughput webhook delivery
+        // High-concurrency connection pool for 5,000+ DLR/s outbound
         ConnectionProvider provider = ConnectionProvider.builder("dlr-pool")
-                .maxConnections(500)
-                .pendingAcquireMaxCount(10000)
-                .pendingAcquireTimeout(Duration.ofSeconds(10))
-                .maxIdleTime(Duration.ofSeconds(20))
+                .maxConnections(10000)
+                .pendingAcquireMaxCount(100000)
+                .pendingAcquireTimeout(Duration.ofSeconds(15))
+                .maxIdleTime(Duration.ofSeconds(30))
+                .maxLifeTime(Duration.ofMinutes(5))
+                .evictInBackground(Duration.ofSeconds(10))
                 .build();
 
         HttpClient httpClient = HttpClient.create(provider)
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 3000)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.TCP_NODELAY, true)
                 .doOnConnected(conn -> conn
-                        .addHandlerLast(new ReadTimeoutHandler(5, TimeUnit.SECONDS))
-                        .addHandlerLast(new WriteTimeoutHandler(5, TimeUnit.SECONDS)));
+                        .addHandlerLast(new ReadTimeoutHandler(10, TimeUnit.SECONDS))
+                        .addHandlerLast(new WriteTimeoutHandler(10, TimeUnit.SECONDS)));
 
         return WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
