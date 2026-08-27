@@ -20,11 +20,14 @@ public class DlrQueueService {
     private final WebhookClient webhookClient;
     private final StatsService statsService;
 
-    // 10M item capacity to support massive continuous load
-    private final BlockingQueue<RetriableDlr> dlrQueue = new LinkedBlockingQueue<>(10_000_000);
+    private final BlockingQueue<RetriableDlr> dlrQueue = new LinkedBlockingQueue<>(5_000_000);
+    private final BlockingQueue<RetriableDlr> retryDelayedQueue = new LinkedBlockingQueue<>(1_000_000);
 
-    private static final int MAX_REQUEUE_ATTEMPTS = 5;
+    private static final int MAX_RETRY_ATTEMPTS = 15;
+    private static final long[] BACKOFF_DELAYS_SECONDS = {3, 6, 10, 15, 25, 35, 45, 60};
+
     private ExecutorService dispatchWorkers;
+    private ScheduledExecutorService delayedRetryScheduler;
     private volatile boolean running = true;
 
     public void enqueueDlr(String callbackUrl, MetaWebhookPayload payload) {
@@ -32,23 +35,25 @@ public class DlrQueueService {
     }
 
     private void enqueueDlr(RetriableDlr item) {
-        // High-concurrency offer with immediate fallback tracking
-        boolean added = dlrQueue.offer(item);
-        if (added) {
+        if (dlrQueue.offer(item)) {
             statsService.incrementDlrEnqueued();
         } else {
-            log.error("❌ Critical: DLR Buffer Queue is completely saturated! Target: {}", item.getCallbackUrl());
+            log.error("❌ Critical: DLR Queue full! Dropping item for {}", item.getCallbackUrl());
         }
     }
 
     @PostConstruct
     public void startDlrConsumers() {
-        int workerCount = Math.max(8, Runtime.getRuntime().availableProcessors() * 4);
+        int workerCount = Math.max(8, Runtime.getRuntime().availableProcessors() * 2);
         this.dispatchWorkers = Executors.newFixedThreadPool(workerCount);
+        this.delayedRetryScheduler = Executors.newSingleThreadScheduledExecutor();
 
         for (int i = 0; i < workerCount; i++) {
             dispatchWorkers.submit(this::processQueue);
         }
+
+        // Background scheduler to re-feed delayed retries back into the active queue
+        delayedRetryScheduler.scheduleWithFixedDelay(this::requeueDelayedItems, 500, 500, TimeUnit.MILLISECONDS);
     }
 
     private void processQueue() {
@@ -58,12 +63,18 @@ public class DlrQueueService {
                 if (item != null) {
                     webhookClient.sendWebhook(item.getCallbackUrl(), item.getPayload())
                             .onErrorResume(error -> {
-                                int attempts = item.incrementAttempt();
-                                if (attempts <= MAX_REQUEUE_ATTEMPTS) {
-                                    enqueueDlr(item);
+                                int attemptIndex = Math.min(item.getAttempts(), BACKOFF_DELAYS_SECONDS.length - 1);
+                                long delaySeconds = BACKOFF_DELAYS_SECONDS[attemptIndex];
+                                int attempts = item.incrementAttempt(delaySeconds);
+
+                                if (attempts <= MAX_RETRY_ATTEMPTS) {
+                                    log.warn("⚠️ Receiver timeout/error at {}. Scheduling retry (Attempt {}/{}) in {}s",
+                                            item.getCallbackUrl(), attempts, MAX_RETRY_ATTEMPTS, delaySeconds);
+                                    retryDelayedQueue.offer(item);
                                 } else {
                                     statsService.incrementDlrDiscarded();
-                                    log.error("❌ Max retry attempts ({}) exhausted for {}", MAX_REQUEUE_ATTEMPTS, item.getCallbackUrl());
+                                    log.error("❌ Max attempts ({}) exhausted for {}. Discarding DLR.",
+                                            MAX_RETRY_ATTEMPTS, item.getCallbackUrl());
                                 }
                                 return Mono.empty();
                             })
@@ -73,20 +84,30 @@ public class DlrQueueService {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                log.error("Unexpected worker exception", e);
+                log.error("Worker processing exception", e);
+            }
+        }
+    }
+
+    private void requeueDelayedItems() {
+        int size = retryDelayedQueue.size();
+        for (int i = 0; i < size; i++) {
+            RetriableDlr item = retryDelayedQueue.peek();
+            if (item != null && item.isReady()) {
+                retryDelayedQueue.poll();
+                dlrQueue.offer(item);
             }
         }
     }
 
     public int getQueueSize() {
-        return dlrQueue.size();
+        return dlrQueue.size() + retryDelayedQueue.size();
     }
 
     @PreDestroy
     public void shutdown() {
         this.running = false;
-        if (dispatchWorkers != null) {
-            dispatchWorkers.shutdownNow();
-        }
+        if (dispatchWorkers != null) dispatchWorkers.shutdownNow();
+        if (delayedRetryScheduler != null) delayedRetryScheduler.shutdownNow();
     }
 }
