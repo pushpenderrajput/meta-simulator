@@ -103,6 +103,13 @@ public class DlrQueueService {
     public int getQueueSize() {
         return dlrQueue.size() + retryDelayedQueue.size();
     }
+    public synchronized void clearAllQueues() {
+        int clearedActive = dlrQueue.size();
+        int clearedRetry = retryDelayedQueue.size();
+        dlrQueue.clear();
+        retryDelayedQueue.clear();
+        log.warn("🧹 DlrQueueService cleared: {} active items, {} retry items purged.", clearedActive, clearedRetry);
+    }
 
     @PreDestroy
     public void shutdown() {

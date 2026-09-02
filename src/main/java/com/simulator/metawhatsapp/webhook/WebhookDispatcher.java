@@ -116,6 +116,11 @@ public class WebhookDispatcher {
 
         dlrQueueService.enqueueDlr(callbackUrl, payload);
     }
+    public synchronized void clearBuffer() {
+        int cleared = inboundBuffer.size();
+        inboundBuffer.clear();
+        log.warn("🧹 WebhookDispatcher buffer cleared: {} lifecycle tasks purged.", cleared);
+    }
 
     @PreDestroy
     public void destroy() {
