@@ -4,6 +4,7 @@ import com.simulator.metawhatsapp.dto.response.StatsResponse;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -19,14 +20,19 @@ public class StatsService {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter
             .ofPattern("dd MMMM yyyy, hh:mm:ss.SSS a", Locale.ENGLISH)
             .withZone(ZoneId.of("Asia/Kolkata"));
+
     // Request Counters
     private final LongAdder incomingRequests = new LongAdder();
     private final LongAdder successRequests = new LongAdder();
     private final LongAdder failedRequests = new LongAdder();
 
-    // Timestamps
+    // Inbound Timestamps
     private final AtomicReference<Instant> firstMessageTime = new AtomicReference<>(null);
     private final AtomicReference<Instant> lastMessageTime = new AtomicReference<>(null);
+
+    // Outbound Sent DLR Timestamps
+    private final AtomicReference<Instant> firstDlrSentTime = new AtomicReference<>(null);
+    private final AtomicReference<Instant> lastDlrSentTime = new AtomicReference<>(null);
 
     // DLR Lifecycle Counters
     private final LongAdder dlrSent = new LongAdder();
@@ -59,15 +65,22 @@ public class StatsService {
         dlrSuccessfullySent.increment();
         if (statusName == null) return;
         switch (statusName.toLowerCase()) {
-            case "sent" -> dlrSent.increment();
+            case "sent" -> {
+                Instant now = Instant.now();
+                firstDlrSentTime.compareAndSet(null, now);
+                lastDlrSentTime.set(now);
+                dlrSent.increment();
+            }
             case "delivered" -> dlrDelivered.increment();
             case "read" -> dlrRead.increment();
             case "failed" -> dlrFailed.increment();
         }
     }
+
     public void incrementDlrStatus(String statusName) {
         recordDlrDelivered(statusName);
     }
+
     public void incrementDlrEnqueued() { dlrEnqueued.increment(); }
     public void incrementDlrFailedToSend() { dlrFailedToSend.increment(); }
     public void incrementDlrDiscarded() { dlrDiscarded.increment(); }
@@ -78,13 +91,27 @@ public class StatsService {
         Instant first = firstMessageTime.get();
         Instant last = lastMessageTime.get();
 
-        double tps = 0.0;
-        long durationSec = 0;
+        double inboundTps = 0.0;
+        long inboundDurationSec = 0;
 
         if (first != null && last != null) {
-            long durationMillis = Math.max(1, java.time.Duration.between(first, last).toMillis());
-            durationSec = durationMillis / 1000;
-            tps = (double) totalInc / (durationMillis / 1000.0);
+            long durationMillis = Math.max(1, Duration.between(first, last).toMillis());
+            inboundDurationSec = durationMillis / 1000;
+            inboundTps = (double) totalInc / (durationMillis / 1000.0);
+        }
+
+        // Outbound Sent DLR TPS Calculation
+        long totalSentDlrs = dlrSent.sum();
+        Instant firstSent = firstDlrSentTime.get();
+        Instant lastSent = lastDlrSentTime.get();
+
+        double outboundSentTps = 0.0;
+        long outboundDurationSec = 0;
+
+        if (firstSent != null && lastSent != null) {
+            long durationMillis = Math.max(1, Duration.between(firstSent, lastSent).toMillis());
+            outboundDurationSec = durationMillis / 1000;
+            outboundSentTps = (double) totalSentDlrs / (durationMillis / 1000.0);
         }
 
         return StatsResponse.builder()
@@ -96,13 +123,17 @@ public class StatsService {
                         .lastMessageTimestamp(last != null ? FORMATTER.format(last) : null)
                         .build())
                 .performance(StatsResponse.PerformanceStats.builder()
-                        .inboundTps(Math.round(tps * 100.0) / 100.0)
-                        .activeDurationSeconds(durationSec)
+                        .inboundTps(Math.round(inboundTps * 100.0) / 100.0)
+                        .activeDurationSeconds(inboundDurationSec)
+                        .outboundSentTps(Math.round(outboundSentTps * 100.0) / 100.0)
+                        .outboundSentDurationSeconds(outboundDurationSec)
+                        .firstDlrSentTimestamp(firstSent != null ? FORMATTER.format(firstSent) : null)
+                        .lastDlrSentTimestamp(lastSent != null ? FORMATTER.format(lastSent) : null)
                         .build())
                 .dlr(StatsResponse.DlrStats.builder()
                         .pendingInQueue(dlrQueueService.getQueueSize())
                         .totalEnqueued(dlrEnqueued.sum())
-                        .sent(dlrSent.sum())
+                        .sent(totalSentDlrs)
                         .delivered(dlrDelivered.sum())
                         .read(dlrRead.sum())
                         .failed(dlrFailed.sum())
@@ -121,6 +152,9 @@ public class StatsService {
 
         firstMessageTime.set(null);
         lastMessageTime.set(null);
+
+        firstDlrSentTime.set(null);
+        lastDlrSentTime.set(null);
 
         dlrSent.reset();
         dlrDelivered.reset();

@@ -28,6 +28,10 @@ public class StatsResponse {
     public static class PerformanceStats {
         private double inboundTps;
         private long activeDurationSeconds;
+        private double outboundSentTps;
+        private long outboundSentDurationSeconds;
+        private String firstDlrSentTimestamp;
+        private String lastDlrSentTimestamp;
     }
 
     @Getter
