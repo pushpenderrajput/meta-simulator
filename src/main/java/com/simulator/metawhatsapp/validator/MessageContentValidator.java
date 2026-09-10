@@ -135,9 +135,9 @@ public class MessageContentValidator {
         if (template == null || isBlank(template.name())) {
             throw invalidParameter("'template.name' is a required field for type=template");
         }
-        if (template.language() == null || isBlank(template.language().code())) {
-            throw invalidParameter("'template.language.code' is a required field for type=template");
-        }
+//        if (template.language() == null || isBlank(template.language().code())) {
+//            throw invalidParameter("'template.language.code' is a required field for type=template");
+//        }
     }
 
     private void validateInteractive(InteractiveObject interactive) {
